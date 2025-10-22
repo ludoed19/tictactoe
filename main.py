@@ -1,171 +1,107 @@
 from tkinter import *
-import random
+from tkinter import messagebox
 
 size_btn = 150
 window = Tk()
-
-list_btn = []
-btn_click = []
-btn_comp = []
-
 window.geometry(f"{size_btn*3}x{size_btn*3+100}")
 window.title("TicTacToe")
+window.config(bg="#d0eaff")
 
-class Btn():
-    global size_btn,list_btn,btn_click,btn_comp
+list_btn, btn_click, btn_comp = [], [], []
+game_active = False
 
-    def __init__(self,x0,y0,index_btn):
-        self.index_btn = index_btn
-        self.x0 = x0
-        self.y0 = y0
-        self.btn = Button(font=('Arial 100 bold'))
+class Btn:
+    wins = [(0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)]
+
+    def __init__(self, x0, y0, index):
+        self.index = index
+        self.btn = Button(font=('Arial', 100, 'bold'), bg='white', state=DISABLED)
         self.btn.place(x=x0, y=y0, width=size_btn, height=size_btn)
-        self.start_btn = Button(text = 'Start', height = 3, width = 9,command=self.click_start, bg = 'gray')
-        self.start_btn.place(rely=0.9,relx=0.6)
-        self.lbl = Label(text = 'Для начала игры нажмите Start', height = 2, width = 30)
-        self.lbl.place(relx=0.05, rely=0.91)
-        self.wins = [[0,1,2],[3,4,5],[6,7,8],[1,4,7],[0,3,6],[2,5,8],[0,4,8],[2,4,6]]
+        self.btn.bind('<Button-1>', self.click)
 
-    def unbind1(self,event):
-        self.btn.unbind('<Button-1>')
-    def bind1(self,event):
-        self.btn.bind('<Button-1>',self.click)
+        if index == 0:
+            Button(
+                text='Start', height=3, width=9, bg="#d5f5e3",
+                font=('Arial', 13, 'bold'), activebackground='#add8e6',
+                command=self.start
+            ).place(rely=0.86, relx=0.7)
+            Label(
+                text='Для начала игры нажмите Start', bg="#d0eaff",
+                font=('Arial', 13, 'bold'), height=2, width=30
+            ).place(relx=0.01, rely=0.89)
 
-    def cfg_green(self):
-        self.btn.config(bg='green')
-    def cfg_white(self):
-        self.btn.config(bg='white')
+    def start(self):
+        global game_active
+        game_active = True
+        btn_click.clear(); btn_comp.clear()
+        for b in list_btn: b.btn.config(text='', bg='white', state=NORMAL)
 
-    def check_best_turn(self):
-        def evaluate(board):
-            score = 0
-            for combo in self.wins:
-                o_count = sum(1 for c in combo if c in board["O"])
-                x_count = sum(1 for c in combo if c in board["X"])
-                if o_count > 0 and x_count == 0:
-                    score += 10 ** o_count
-                elif x_count > 0 and o_count == 0:
-                    score -= 10 ** x_count
-            return score
+    def evaluate(self, board):
+        s = 0
+        for c in self.wins:
+            o = sum(i in board['O'] for i in c); x = sum(i in board['X'] for i in c)
+            if o and not x: s += 10 ** o
+            elif x and not o: s -= 10 ** x
+        return s
 
-        def minimax(board, depth, alpha, beta, is_maximizing):
-            for combo in self.wins:
-                if all(c in board["O"] for c in combo):
-                    return 1000 - depth
-                if all(c in board["X"] for c in combo):
-                    return -1000 + depth
-            if len(board["O"]) + len(board["X"]) == 9:
-                return 0
-
-            if depth >= 6:
-                return evaluate(board)
-
-            if is_maximizing:
-                max_eval = -9999
-                for i in range(9):
-                    if i not in board["O"] and i not in board["X"]:
-                        board["O"].append(i)
-                        eval_score = minimax(board, depth+1, alpha, beta, False)
-                        board["O"].remove(i)
-                        max_eval = max(max_eval, eval_score)
-                        alpha = max(alpha, eval_score)
-                        if beta <= alpha:
-                            break
-                return max_eval
-            else:
-                min_eval = 9999
-                for i in range(9):
-                    if i not in board["O"] and i not in board["X"]:
-                        board["X"].append(i)
-                        eval_score = minimax(board, depth+1, alpha, beta, True)
-                        board["X"].remove(i)
-                        min_eval = min(min_eval, eval_score)
-                        beta = min(beta, eval_score)
-                        if beta <= alpha:
-                            break
-                return min_eval
-
-        best_score = -9999
-        move = None
-        board = {"O": btn_comp.copy(), "X": btn_click.copy()}
-
+    def minimax(self, b, d, a, bta, maxim):
+        for c in self.wins:
+            if all(i in b["O"] for i in c): return 1000 - d
+            if all(i in b["X"] for i in c): return -1000 + d
+        if len(b["O"])+len(b["X"])==9 or d>=6: return self.evaluate(b)
+        best = -9999 if maxim else 9999
         for i in range(9):
-            if i not in board["O"] and i not in board["X"]:
-                board["O"].append(i)
-                score = minimax(board, 0, -9999, 9999, False)
-                board["O"].remove(i)
-                if score > best_score:
-                    best_score = score
-                    move = i
+            if i not in b['O']+b['X']:
+                (b['O'] if maxim else b['X']).append(i)
+                val = self.minimax(b, d+1, a, bta, not maxim)
+                (b['O'] if maxim else b['X']).remove(i)
+                if maxim: best,a=max(best,val),max(a,val)
+                else: best,bta=min(best,val),min(bta,val)
+                if bta<=a: break
+        return best
 
-        return move
+    def check_win(self, moves):
+        for combo in self.wins:
+            if all(i in moves for i in combo):
+                for i in combo: list_btn[i].btn.config(bg='red')
+                for q in list_btn: q.btn.config(state=DISABLED)
+                messagebox.showinfo("Игра окончена", "Компьютер выиграл!"); return True
+        return False
 
-    def win_check(self,lst1):
-        self.win = False
-        btn_choice = sorted(lst1)
-        k = 0
-        for i in range(8):
-            for j in range(3):
-                if self.wins[i][j] in btn_choice:
-                    k+=1
-            if k == 3:
-                self.win = True
-                break
-            else:
-                k=0
-        if self.win:
-            for q in list_btn:
-                q.unbind1('<Button-1>')
-            for w in range(3):
-                list_btn[self.wins[i][w]].cfg_green()
+    def check_draw(self):
+        if len(btn_click)+len(btn_comp)==9:
+            for q in list_btn: q.btn.config(state=DISABLED, bg='#ddd')
+            messagebox.showinfo("Игра окончена", "Ничья!"); return True
+        return False
 
-    def cfg_o(self,str1):
-        self.btn.config(text=str1)
+    def comp_turn(self):
+        board = {'O': btn_comp.copy(), 'X': btn_click.copy()}
+        move,best=None,-9999
+        for i in range(9):
+            if i not in board['O']+board['X']:
+                board['O'].append(i)
+                score=self.minimax(board,0,-9999,9999,False)
+                board['O'].remove(i)
+                if score>best: best,move=score,i
+        if move is not None:
+            btn_comp.append(move); list_btn[move].btn.config(text='O', state=DISABLED)
+            if not self.check_win(btn_comp): self.check_draw()
 
-    def game(self):
-        if len(btn_comp) == 0 and len(btn_click) == 0:
-            x = random.randint(0,8)
-        else:
-            x = self.check_best_turn()
+    def click(self, _):
+        if not game_active:
+            messagebox.showinfo("Внимание","Сначала нажмите Start!"); return
+        if self.index in btn_click+btn_comp: return
+        self.btn.config(text='X', state=DISABLED); btn_click.append(self.index)
+        if not self.check_draw(): self.comp_turn()
 
-        if x is None:
-            return
-
-        btn_comp.append(x)
-        list_btn[x].cfg_o('O')
-        list_btn[x].unbind1('<Button-1>')
-
-        self.win_check(btn_comp)
-
-    def click_start(self):
-        global btn_click, btn_comp
-        btn_click = []
-        btn_comp = []
-        for b in list_btn:
-            b.btn.config(text='')
-            b.bind1('<Button-1>')
-            b.cfg_white()
-
-    def click(self,event):
-        self.btn.config(text='X')
-        btn_click.append(self.index_btn)
-        self.win_check(btn_comp)
-        self.win_check(btn_click)
-        self.btn.unbind('<Button-1>')
-        self.game()
 
 def draw():
-    index = 0
-    x = 0
-    y = 0
-    for i in range(3):
-        for j in range(3):
-            list_btn.append(Btn(x,y,index))
-            index+=1
-            x+=size_btn
-        x=0
-        y+=size_btn
+    index,x,y=0,0,0
+    for _ in range(3):
+        for _ in range(3):
+            list_btn.append(Btn(x,y,index)); index+=1; x+=size_btn
+        x=0; y+=size_btn
 
-window.resizable(width=False, height=False)
+window.resizable(False, False)
 draw()
 window.mainloop()
